@@ -5,8 +5,10 @@ import path from "path";
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
   server: {
-    host: "0.0.0.0", // Allow access from any IP on network
-    port: 8080,
+    host: "localhost", // Bind to localhost for predictable local access
+    port: 5173,
+    strictPort: true,
+    open: true,
   },
   plugins: [react()],
   resolve: {
