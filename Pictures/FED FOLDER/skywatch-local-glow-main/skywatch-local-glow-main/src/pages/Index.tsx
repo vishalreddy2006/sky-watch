@@ -31,6 +31,8 @@ import ExportMenu from "@/components/ExportMenu";
 import { indianCities } from "@/data/indianCitiesWeather";
 import { cn } from "@/lib/utils";
 import AITips from "@/components/AITips";
+import AnalyzePanel from "@/components/AnalyzePanel";
+import { requestNotificationPermission, notifyUser } from "@/utils/notifications";
 
 const Index = () => {
   const [city, setCity] = useState("");
@@ -54,7 +56,21 @@ const Index = () => {
 
   useEffect(() => {
     // Load default city on mount
+    // Restore toggles from localStorage
+    const ls = window.localStorage;
+    const ai = ls.getItem('showAITips');
+    const fc = ls.getItem('showForecast');
+    const an = ls.getItem('showAnalyze');
+    const ar = ls.getItem('autoRefreshEnabled');
+    if (ai !== null) setShowAITips(ai === 'true');
+    if (fc !== null) setShowForecast(fc === 'true');
+    if (an !== null) setShowAnalyze(an === 'true');
+    if (ar !== null) setAutoRefreshEnabled(ar === 'true');
+
     loadWeatherByCity("Hyderabad", units);
+
+    // Request notification permission upfront (non-blocking)
+    requestNotificationPermission().catch(() => {});
   }, []);
 
   // Auto-refresh every 5 minutes when tab is visible and enabled
@@ -103,6 +119,77 @@ const Index = () => {
       loadWeatherByCity(selectedCity, newUnits);
     }
   };
+
+  // Persist toggles when they change
+  useEffect(() => { window.localStorage.setItem('showAITips', String(showAITips)); }, [showAITips]);
+  useEffect(() => { window.localStorage.setItem('showForecast', String(showForecast)); }, [showForecast]);
+  useEffect(() => { window.localStorage.setItem('showAnalyze', String(showAnalyze)); }, [showAnalyze]);
+  useEffect(() => { window.localStorage.setItem('autoRefreshEnabled', String(autoRefreshEnabled)); }, [autoRefreshEnabled]);
+
+  // Active polling with change detection for notifications
+  useEffect(() => {
+    let lastSnapshot: any = null;
+    let pollId: number | undefined;
+    const POLL_MS = 60 * 1000; // 1 minute for quick feedback
+
+    const significantChange = (oldData: any, newData: any) => {
+      if (!oldData || !newData) return false;
+      try {
+        const oldTemp = oldData.current?.temp;
+        const newTemp = newData.current?.temp;
+        if (typeof oldTemp === 'number' && typeof newTemp === 'number') {
+          if (Math.abs(newTemp - oldTemp) >= 2) return { type: 'temp', delta: newTemp - oldTemp };
+        }
+
+        const oldPop = Math.max(...(oldData.hourly?.slice(0, 6).map((h: any) => h.pop) || [0]));
+        const newPop = Math.max(...(newData.hourly?.slice(0, 6).map((h: any) => h.pop) || [0]));
+        if (newPop - oldPop >= 0.3) return { type: 'rain', from: oldPop, to: newPop };
+
+        const oldWind = oldData.current?.wind_speed || 0;
+        const newWind = newData.current?.wind_speed || 0;
+        if (newWind - oldWind >= 5) return { type: 'wind', delta: newWind - oldWind };
+      } catch (e) {
+        return false;
+      }
+      return false;
+    };
+
+    const poll = async () => {
+      try {
+        if (!autoRefreshEnabled) return;
+        // Use currently selected city or location
+        if (location?.startsWith('📍') || location?.startsWith('🎯')) {
+          // If using live location, refresh via getCurrentLocation
+          await getCurrentLocation(units);
+        } else if (selectedCity) {
+          await loadWeatherByCity(selectedCity, units);
+        }
+
+        // Compare snapshots
+        const newSnap = weatherData;
+        const sig = significantChange(lastSnapshot, newSnap);
+        if (sig) {
+          if (sig.type === 'temp') {
+            notifyUser('Temperature changed', `Now ${Math.round(newSnap.current.temp)}°, changed by ${Math.round(sig.delta)}°`);
+          } else if (sig.type === 'rain') {
+            notifyUser('Rain chance increased', `Precip chance rose to ${Math.round(sig.to*100)}%`);
+          } else if (sig.type === 'wind') {
+            notifyUser('Windy now', `Wind increased by ${Math.round(sig.delta)} ${units === 'metric' ? 'm/s' : 'mph'}`);
+          }
+        }
+        lastSnapshot = JSON.parse(JSON.stringify(newSnap));
+      } catch (e) {
+        // ignore polling errors
+      }
+    };
+
+    // Start polling
+    pollId = window.setInterval(poll, POLL_MS);
+    // Run first poll immediately
+    poll();
+
+    return () => { if (pollId) clearInterval(pollId); };
+  }, [autoRefreshEnabled, selectedCity, units, location, weatherData, getCurrentLocation, loadWeatherByCity]);
 
   const handleCitySelect = (cityName: string) => {
     setSelectedCity(cityName);
