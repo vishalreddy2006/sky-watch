@@ -84,10 +84,13 @@ export class EnhancedWeatherAPI {
   }
 
   // Convert Open-Meteo response to our standard weather format
-  static convertOpenMeteoData(data: any, units: string) {
-    const current = data.current_weather;
-    const hourly = data.hourly;
-    const daily = data.daily;
+  static convertOpenMeteoData(data: unknown, units: string) {
+    // Narrow the data shape defensively
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const d = data as any;
+    const current = d.current_weather;
+    const hourly = d.hourly;
+    const daily = d.daily;
     
     const currentWeatherInfo = this.convertWeatherCode(current.weathercode);
     

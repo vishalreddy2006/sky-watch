@@ -172,8 +172,10 @@ export const useWeather = () => {
         if (formattedLocation && !formattedLocation.includes('Unknown') && formattedLocation.length > 5) {
           locationDisplay = formattedLocation;
         }
-      } catch {
-        // Keep the geocoding result if precise location fails
+      } catch (err) {
+        // Keep the geocoding result if precise location fails; log for diagnostics
+         
+        console.log('Precise location lookup failed:', err);
       }
       
   setWeatherData(data);
@@ -211,7 +213,10 @@ export const useWeather = () => {
           description: "Use HTTPS for precise location (browser restricts high-accuracy on non-secure pages).",
         });
       }
-    } catch {}
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.log('Secure context check failed:', err);
+    }
     setLoading(true);
     try {
       // Get live weather using enhanced API
@@ -228,7 +233,7 @@ export const useWeather = () => {
       
       try {
         // Try ultra-precise location API for village-level detail
-        const ultraLocation: any = {
+        const ultraLocation: { latitude: number; longitude: number; accuracy?: number } = {
           latitude: lat,
           longitude: lon,
           accuracy: 10 // estimated for coordinate input

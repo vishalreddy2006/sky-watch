@@ -1,9 +1,9 @@
 import React from 'react';
 
-type Weather = any;
+type HourlyPoint = { dt: number; temp: number; pop?: number };
 
 interface Props {
-  data: Weather;
+  data: { current?: { temp?: number }; hourly?: HourlyPoint[] } | null;
   units: string;
 }
 
@@ -16,10 +16,10 @@ const AnalyzePanel: React.FC<Props> = ({ data, units }) => {
   // Quick trend analysis
   const current = data.current?.temp ?? null;
   const next24 = data.hourly?.slice(0, 24) ?? [];
-  const maxTemp = next24.reduce((m: number, h: any) => (h.temp > m ? h.temp : m), -Infinity);
-  const minTemp = next24.reduce((m: number, h: any) => (h.temp < m ? h.temp : m), Infinity);
-  const avgTemp = next24.length ? Math.round(next24.reduce((s: number, h: any) => s + h.temp, 0) / next24.length) : null;
-  const maxPop = next24.reduce((m: number, h: any) => (h.pop > m ? h.pop : m), 0);
+  const maxTemp = next24.reduce((m: number, h: HourlyPoint) => (h.temp > m ? h.temp : m), -Infinity);
+  const minTemp = next24.reduce((m: number, h: HourlyPoint) => (h.temp < m ? h.temp : m), Infinity);
+  const avgTemp = next24.length ? Math.round(next24.reduce((s: number, h: HourlyPoint) => s + h.temp, 0) / next24.length) : null;
+  const maxPop = next24.reduce((m: number, h: HourlyPoint) => (h.pop && h.pop > m ? h.pop : m), 0);
 
   return (
     <div className="rounded-lg border border-border bg-card text-card-foreground p-4">

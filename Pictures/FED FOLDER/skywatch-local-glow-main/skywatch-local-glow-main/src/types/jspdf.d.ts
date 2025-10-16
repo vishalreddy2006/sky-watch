@@ -1,5 +1,6 @@
 declare module 'jspdf' {
-  const jsPDF: any;
+  // Keep typings minimal and safe for dynamic import usage in the app
+  const jsPDF: unknown;
   export default jsPDF;
   export { jsPDF };
 }

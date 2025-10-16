@@ -97,14 +97,14 @@ export const UltraPreciseLocationDisplay: React.FC<LocationDetailProps> = ({
           {/* Accuracy & Confidence Badges */}
           <div className="flex flex-wrap gap-1">
             {accuracy && (
-              <Badge variant={accuracyInfo.color as any} className="text-xs">
+              <Badge variant={(accuracyInfo.color as 'default' | 'secondary' | 'outline')} className="text-xs">
                 🎯 {accuracyInfo.level}
                 {accuracyInfo.description && ` • ${accuracyInfo.description}`}
               </Badge>
             )}
             
             {confidence && (
-              <Badge variant={getConfidenceColor(confidence) as any} className="text-xs">
+              <Badge variant={(getConfidenceColor(confidence) as 'default' | 'secondary' | 'outline')} className="text-xs">
                 📊 {confidence}% confident
               </Badge>
             )}

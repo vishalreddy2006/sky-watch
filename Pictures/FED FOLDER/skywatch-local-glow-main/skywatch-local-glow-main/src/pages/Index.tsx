@@ -34,6 +34,13 @@ import AITips from "@/components/AITips";
 import AnalyzePanel from "@/components/AnalyzePanel";
 import { requestNotificationPermission, notifyUser } from "@/utils/notifications";
 
+type WeatherDataLocal = {
+  current?: { temp?: number; humidity?: number; pressure?: number; wind_speed?: number; uvi?: number; weather?: Array<{ description?: string; icon?: string }>; };
+  hourly?: Array<{ dt?: number; temp?: number; pop?: number; weather?: Array<{ description?: string }> }>;
+  daily?: Array<{ dt?: number; temp?: { min?: number; max?: number }; weather?: Array<{ description?: string }> }>;
+  timezone_offset?: number;
+};
+
 const Index = () => {
   const [city, setCity] = useState("");
   const [units, setUnits] = useState("metric");
@@ -77,7 +84,7 @@ const Index = () => {
   useEffect(() => {
     if (!autoRefreshEnabled) return;
     const REFRESH_MS = 5 * 60 * 1000;
-    let timer: number | undefined;
+  const timer = window.setInterval(refresh, REFRESH_MS);
     const refresh = () => {
       if (document.visibilityState === "visible") {
         if (location?.startsWith("📍") || location?.startsWith("🎯")) {
@@ -88,7 +95,7 @@ const Index = () => {
         }
       }
     };
-    timer = window.setInterval(refresh, REFRESH_MS);
+  // timer already set above
     const onVis = () => document.visibilityState === "visible" && refresh();
     document.addEventListener("visibilitychange", onVis);
     return () => {
@@ -128,11 +135,15 @@ const Index = () => {
 
   // Active polling with change detection for notifications
   useEffect(() => {
-    let lastSnapshot: any = null;
-    let pollId: number | undefined;
+      type Snapshot = {
+        current?: { temp?: number; wind_speed?: number };
+        hourly?: Array<{ pop?: number }>;
+      } | null;
+      let lastSnapshot: Snapshot = null;
+  const pollId = window.setInterval(poll, POLL_MS);
     const POLL_MS = 60 * 1000; // 1 minute for quick feedback
 
-    const significantChange = (oldData: any, newData: any) => {
+    const significantChange = (oldData: Snapshot, newData: Snapshot) => {
       if (!oldData || !newData) return false;
       try {
         const oldTemp = oldData.current?.temp;
@@ -140,9 +151,8 @@ const Index = () => {
         if (typeof oldTemp === 'number' && typeof newTemp === 'number') {
           if (Math.abs(newTemp - oldTemp) >= 2) return { type: 'temp', delta: newTemp - oldTemp };
         }
-
-        const oldPop = Math.max(...(oldData.hourly?.slice(0, 6).map((h: any) => h.pop) || [0]));
-        const newPop = Math.max(...(newData.hourly?.slice(0, 6).map((h: any) => h.pop) || [0]));
+        const oldPop = Math.max(...(oldData.hourly?.slice(0, 6).map((h) => h.pop ?? 0) || [0]));
+        const newPop = Math.max(...(newData.hourly?.slice(0, 6).map((h) => h.pop ?? 0) || [0]));
         if (newPop - oldPop >= 0.3) return { type: 'rain', from: oldPop, to: newPop };
 
         const oldWind = oldData.current?.wind_speed || 0;
@@ -183,10 +193,8 @@ const Index = () => {
       }
     };
 
-    // Start polling
-    pollId = window.setInterval(poll, POLL_MS);
-    // Run first poll immediately
-    poll();
+  // Run first poll immediately (pollId already created)
+  poll();
 
     return () => { if (pollId) clearInterval(pollId); };
   }, [autoRefreshEnabled, selectedCity, units, location, weatherData, getCurrentLocation, loadWeatherByCity]);
@@ -339,7 +347,7 @@ const Index = () => {
             Refresh
           </Button>
 
-          <ExportMenu data={weatherData as any} disabled={!weatherData} />
+          <ExportMenu data={(weatherData as unknown) as WeatherDataLocal} disabled={!weatherData} />
         </div>
 
         {weatherData && (
@@ -365,7 +373,7 @@ const Index = () => {
               />
             </div>
 
-            {showAITips && <AITips data={weatherData as any} units={units} />}
+            {showAITips && <AITips data={(weatherData as unknown) as WeatherDataLocal} units={units} />}
 
             {showForecast && (
               <>

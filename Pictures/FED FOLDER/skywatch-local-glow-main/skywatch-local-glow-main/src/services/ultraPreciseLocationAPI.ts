@@ -25,7 +25,7 @@ interface UltraPreciseLocationData {
   fullAddress: string;
   confidence: number; // 0-100% confidence in location accuracy
   source: string;
-  rawData?: any;
+  rawData?: unknown;
 }
 
 export class UltraPreciseLocationAPI {
@@ -406,19 +406,23 @@ export class UltraPreciseLocationAPI {
   /**
    * 📊 Calculate Nominatim confidence score
    */
-  private static calculateNominatimConfidence(data: any): number {
+  private static calculateNominatimConfidence(data: unknown): number {
     let confidence = 70;
-    
-    if (data.address) {
-      if (data.address.village || data.address.hamlet) confidence += 15;
-      if (data.address.neighbourhood) confidence += 10;
-      if (data.address.road) confidence += 5;
-      if (data.address.house_number) confidence += 10;
-      if (data.address.postcode) confidence += 5;
+    // Narrowly inspect possible properties with safe guards
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const d = data as any;
+      if (d.address) {
+        if (d.address.village || d.address.hamlet) confidence += 15;
+        if (d.address.neighbourhood) confidence += 10;
+        if (d.address.road) confidence += 5;
+        if (d.address.house_number) confidence += 10;
+        if (d.address.postcode) confidence += 5;
+      }
+      if (d.importance && d.importance > 0.5) confidence += 5;
+    } catch {
+      // leave default confidence
     }
-    
-    // Check importance score
-    if (data.importance && data.importance > 0.5) confidence += 5;
     
     return Math.min(confidence, 95);
   }
@@ -426,24 +430,34 @@ export class UltraPreciseLocationAPI {
   /**
    * 🏗️ Build full address from BigDataCloud data
    */
-  private static buildFullAddress(data: any): string {
-    const parts = [];
-    
-    if (data.locality) parts.push(data.locality);
-    if (data.city && data.city !== data.locality) parts.push(data.city);
-    if (data.principalSubdivision) parts.push(data.principalSubdivision);
-    if (data.countryName) parts.push(data.countryName);
-    if (data.postcode) parts.push(data.postcode);
-    
+  private static buildFullAddress(data: unknown): string {
+    const parts: string[] = [];
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const d = data as any;
+      if (d.locality) parts.push(d.locality);
+      if (d.city && d.city !== d.locality) parts.push(d.city);
+      if (d.principalSubdivision) parts.push(d.principalSubdivision);
+      if (d.countryName) parts.push(d.countryName);
+      if (d.postcode) parts.push(d.postcode);
+    } catch {
+      // noop
+    }
     return parts.join(', ') || 'Address not available';
   }
   
   /**
    * 🗺️ Extract MapBox component by type
    */
-  private static extractMapBoxComponent(features: any[], type: string): string {
-    const feature = features?.find(f => f.place_type?.includes(type));
-    return feature?.text || '';
+  private static extractMapBoxComponent(features: unknown[] | undefined, type: string): string {
+    if (!features) return '';
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const feat = (features as any[]).find((f) => f.place_type?.includes(type));
+      return feat?.text || '';
+    } catch {
+      return '';
+    }
   }
   
   /**
