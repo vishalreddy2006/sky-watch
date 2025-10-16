@@ -53,23 +53,59 @@ export class UltraPreciseLocationAPI {
     const validResults = locationResults
       .filter(result => result.status === 'fulfilled')
       .map(result => (result as PromiseFulfilledResult<UltraPreciseLocationData>).value)
-      .filter(result => result.confidence > 70);
+      .filter(result => result.confidence > 60);
     
     if (validResults.length === 0) {
       throw new Error('Unable to determine precise location');
     }
     
-    // Choose the most detailed result (highest confidence + most address components)
-    const bestResult = validResults.reduce((best, current) => {
-      const bestScore = best.confidence + this.calculateDetailScore(best);
-      const currentScore = current.confidence + this.calculateDetailScore(current);
-      return currentScore > bestScore ? current : best;
-    });
+    // Prefer results that include a postcode and normalized city/state.
+    // If multiple results have postcode, pick the one with the highest combined score.
+    const withPostcode = validResults.filter(r => r.postcode && String(r.postcode).trim().length > 0);
+    let bestResult = null as UltraPreciseLocationData | null;
+    const pickBest = (list: UltraPreciseLocationData[]) =>
+      list.reduce((best, current) => {
+        const bestScore = best.confidence + this.calculateDetailScore(best) + (best.postcode ? 10 : 0);
+        const currentScore = current.confidence + this.calculateDetailScore(current) + (current.postcode ? 10 : 0);
+        return currentScore > bestScore ? current : best;
+      });
+
+    if (withPostcode.length > 0) {
+      bestResult = pickBest(withPostcode);
+    } else if (validResults.length > 0) {
+      bestResult = pickBest(validResults);
+    }
+
+    if (!bestResult) {
+      throw new Error('Unable to determine precise location');
+    }
     
     // Enhance with GPS accuracy
     bestResult.accuracy = coordinates.accuracy;
     bestResult.latitude = coordinates.latitude;
     bestResult.longitude = coordinates.longitude;
+
+    // Normalize city/state: prefer populated fields in order of usefulness
+    const normalizeCity = (r: UltraPreciseLocationData) => {
+      r.city = r.city || r.locality || r.village || r.hamlet || r.neighborhood || r.suburb || r.fullAddress?.split(',')[0] || '';
+      r.state = r.state || r.district || '';
+      return r;
+    };
+    bestResult = normalizeCity(bestResult);
+
+    // If there is still no postcode, attempt specialized postal code detection and attach it
+    if (!bestResult.postcode || String(bestResult.postcode).trim() === '') {
+      try {
+        const postcode = await this.getPostalCode(bestResult.latitude, bestResult.longitude);
+        if (postcode) {
+          bestResult.postcode = postcode;
+          // Increase confidence slightly when postcode is found
+          bestResult.confidence = Math.min(95, (bestResult.confidence || 70) + 8);
+        }
+      } catch (err) {
+        // ignore postal code lookup failures
+      }
+    }
     
     console.log('✅ Ultra-precise location found:', bestResult);
     return bestResult;
