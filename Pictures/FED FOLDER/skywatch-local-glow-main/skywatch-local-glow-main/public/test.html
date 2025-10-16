@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyWatch Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        .test-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+            backdrop-filter: blur(10px);
+        }
+        .status {
+            font-size: 24px;
+            margin: 20px 0;
+        }
+        .success { color: #4ade80; }
+        .info { color: #60a5fa; }
+        .network-info {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-card">
+        <h1>🎉 SkyWatch Server Test</h1>
+        <div class="status success">✅ Server is Running Successfully!</div>
+        <p>If you can see this page, your SkyWatch development server is working perfectly.</p>
+        
+        <div class="network-info">
+            <h3>📡 Access Information:</h3>
+            <p><strong>Local Access:</strong> http://localhost:8081/</p>
+            <p><strong>Network Access:</strong> http://192.168.1.8:8081/</p>
+            <p><strong>Status:</strong> <span class="success">✅ Online</span></p>
+            <p><strong>Time:</strong> <span id="current-time"></span></p>
+        </div>
+
+        <button onclick="testMainApp()">🌤️ Test Main SkyWatch App</button>
+        <button onclick="testLocation()">📍 Test GPS Location</button>
+        
+        <div id="test-results"></div>
+    </div>
+
+    <script>
+        // Update current time
+        document.getElementById('current-time').textContent = new Date().toLocaleString();
+
+        function testMainApp() {
+            window.location.href = '/';
+        }
+
+        function testLocation() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<div class="status info">🔍 Testing GPS access...</div>';
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        results.innerHTML = `
+                            <div class="test-card">
+                                <div class="status success">✅ GPS Access Works!</div>
+                                <p>Latitude: ${position.coords.latitude.toFixed(6)}</p>
+                                <p>Longitude: ${position.coords.longitude.toFixed(6)}</p>
+                                <p>Accuracy: ±${position.coords.accuracy}m</p>
+                            </div>
+                        `;
+                    },
+                    function(error) {
+                        results.innerHTML = `
+                            <div class="test-card">
+                                <div class="status" style="color: #f87171;">❌ GPS Error: ${error.message}</div>
+                                <p>Please allow location access for full functionality.</p>
+                            </div>
+                        `;
+                    }
+                );
+            } else {
+                results.innerHTML = '<div class="test-card"><div class="status" style="color: #f87171;">❌ GPS not supported in this browser</div></div>';
+            }
+        }
+
+        // Auto-test every 5 seconds
+        setInterval(() => {
+            document.getElementById('current-time').textContent = new Date().toLocaleString();
+        }, 1000);
+    </script>
+</body>
+</html>
