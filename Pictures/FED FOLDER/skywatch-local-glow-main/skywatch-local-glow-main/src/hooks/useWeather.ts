@@ -118,7 +118,9 @@ export const useWeather = () => {
           // Fall back to free geocoding service
           console.log('OpenWeather geocoding failed, trying Nominatim...');
           const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}&limit=1`;
-          const nominatimResponse = await fetch(nominatimUrl);
+          const nominatimResponse = await fetch(nominatimUrl, {
+            headers: { 'User-Agent': 'SkyWatch-Weather-App/1.0', 'Accept-Language': 'en' }
+          });
           
           if (!nominatimResponse.ok) {
             throw new Error('All geocoding services failed');
@@ -136,7 +138,9 @@ export const useWeather = () => {
       } else {
         // Use free Nominatim geocoding when no API key
         const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}&limit=1`;
-        const nominatimResponse = await fetch(nominatimUrl);
+        const nominatimResponse = await fetch(nominatimUrl, {
+          headers: { 'User-Agent': 'SkyWatch-Weather-App/1.0', 'Accept-Language': 'en' }
+        });
         
         if (!nominatimResponse.ok) {
           throw new Error('Failed to find city location');
@@ -199,6 +203,15 @@ export const useWeather = () => {
     lon: number,
     units: string = "metric"
   ) => {
+    // Warn if not in a secure context (required for best geolocation on the web)
+    try {
+      if (!window.isSecureContext && window.location.hostname !== 'localhost') {
+        toast({
+          title: "Low Accuracy Warning",
+          description: "Use HTTPS for precise location (browser restricts high-accuracy on non-secure pages).",
+        });
+      }
+    } catch {}
     setLoading(true);
     try {
       // Get live weather using enhanced API
@@ -313,7 +326,7 @@ export const useWeather = () => {
   setAccuracyLabel(accuracyReport || `Precise location • ${source}`);
       
       toast({
-        title: "� Ultra-Precise Weather!",
+        title: "🌤️ Ultra-Precise Weather!",
         description: `${accuracyReport} • Weather from ${source}`,
         duration: 5000,
       });
@@ -372,7 +385,7 @@ export const useWeather = () => {
   setAccuracyLabel(accuracyReport || `Precise location • ${source}`);
         
         toast({
-          title: "� Ultra-Precise Weather!",
+          title: "🌤️ Ultra-Precise Weather!",
           description: `${accuracyReport}`,
           duration: 6000,
         });

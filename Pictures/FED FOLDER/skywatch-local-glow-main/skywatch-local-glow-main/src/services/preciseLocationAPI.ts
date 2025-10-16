@@ -284,9 +284,9 @@ export class PreciseLocationAPI {
       parts.push(address.city.trim());
     }
     
-    // Add pincode if available
+    // Add pincode if available (prefix with PIN for clarity)
     if (address.postcode && address.postcode.trim()) {
-      parts.push(address.postcode.trim());
+      parts.push(`PIN ${address.postcode.trim()}`);
     }
     
     // Add state if available

@@ -84,27 +84,67 @@ export class UltraPreciseLocationAPI {
         reject(new Error('Geolocation not supported'));
         return;
       }
-      
-      // Ultra-high accuracy settings
+
+      // Prefer watchPosition to refine accuracy with multiple samples
       const options: PositionOptions = {
         enableHighAccuracy: true,
-        timeout: 30000, // 30 seconds
-        maximumAge: 0 // Always get fresh location
+        timeout: 30000, // total time budget
+        maximumAge: 0,
       };
-      
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy || 999
-          });
-        },
-        (error) => {
-          reject(new Error(`GPS Error: ${error.message}`));
-        },
-        options
-      );
+
+      let best: { latitude: number; longitude: number; accuracy: number } | null = null;
+      let samples = 0;
+      const maxSamples = 5;
+      const minAcceptableAccuracy = 20; // meters
+
+      const done = (result: { latitude: number; longitude: number; accuracy: number }) => {
+        if (watchId != null) navigator.geolocation.clearWatch(watchId);
+        clearTimeout(timerId);
+        resolve(result);
+      };
+
+      const onPosition = (position: GeolocationPosition) => {
+        samples++;
+        const curr = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy || 999,
+        };
+        // Track best accuracy
+        if (!best || curr.accuracy < best.accuracy) {
+          best = curr;
+          // Early exit if we already have excellent accuracy
+          if (best.accuracy <= minAcceptableAccuracy) {
+            return done(best);
+          }
+        }
+        // Stop after sufficient samples
+        if (samples >= maxSamples) {
+          return done(best!);
+        }
+      };
+
+      const onError = (error: GeolocationPositionError) => {
+        // Fallback to single-shot getCurrentPosition once
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy || 999,
+            });
+          },
+          () => reject(new Error(`GPS Error: ${error.message}`)),
+          options
+        );
+      };
+
+      const watchId = navigator.geolocation.watchPosition(onPosition, onError, options);
+      const timerId = setTimeout(() => {
+        // Time budget exceeded; return best available or fail
+        if (best) return done(best);
+        reject(new Error('GPS timeout: unable to get accurate position'));
+      }, options.timeout);
     });
   }
   
@@ -116,8 +156,9 @@ export class UltraPreciseLocationAPI {
     
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'SkyWatch-Weather-App/1.0'
-      }
+        'User-Agent': 'SkyWatch-Weather-App/1.0',
+        'Accept-Language': 'en',
+      },
     });
     
     if (!response.ok) throw new Error('Nominatim failed');
