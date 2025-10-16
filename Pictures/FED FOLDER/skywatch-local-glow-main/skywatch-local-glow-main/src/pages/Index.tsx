@@ -21,7 +21,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { MapPin, Search, RefreshCw, Check, ChevronsUpDown, Sun, Moon } from "lucide-react";
+import { MapPin, Search, RefreshCw, Check, ChevronsUpDown } from "lucide-react";
 import { useTheme } from "next-themes";
 import { WeatherCard } from "@/components/WeatherCard";
 import { HourlyForecast } from "@/components/HourlyForecast";
@@ -38,6 +38,10 @@ const Index = () => {
   const [open, setOpen] = useState(false);
   const [selectedCity, setSelectedCity] = useState("Hyderabad");
   const { theme, setTheme } = useTheme();
+  const [showAITips, setShowAITips] = useState(true);
+  const [showForecast, setShowForecast] = useState(true);
+  const [showAnalyze, setShowAnalyze] = useState(true);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   
   const {
     loading,
@@ -53,8 +57,9 @@ const Index = () => {
     loadWeatherByCity("Hyderabad", units);
   }, []);
 
-  // Auto-refresh every 5 minutes when tab is visible
+  // Auto-refresh every 5 minutes when tab is visible and enabled
   useEffect(() => {
+    if (!autoRefreshEnabled) return;
     const REFRESH_MS = 5 * 60 * 1000;
     let timer: number | undefined;
     const refresh = () => {
@@ -74,7 +79,7 @@ const Index = () => {
       if (timer) clearInterval(timer);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [selectedCity, units, location]);
+  }, [selectedCity, units, location, autoRefreshEnabled]);
 
   const handleSearch = () => {
     if (city.trim()) {
@@ -110,19 +115,54 @@ const Index = () => {
     <div className="min-h-screen py-8 px-4" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>
       <div className="max-w-6xl mx-auto space-y-8">
         <header className="text-center space-y-2">
-          <div className="flex items-center justify-center gap-2">
+            <div className="flex items-center justify-center gap-2">
             <h1 className="text-4xl font-bold text-foreground bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               SkyWatch
             </h1>
-            <Button
-              variant="outline"
-              className="ml-3 h-9 px-3"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              aria-label="Toggle theme"
-              title="Toggle light/dark"
-            >
-              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </Button>
+            <div className="ml-3 h-9 px-3 flex items-center gap-2">
+              <Select value={theme} onValueChange={(v) => setTheme(v as 'light' | 'dark' | 'system')}>
+                <SelectTrigger className="w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Toggle buttons for features */}
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={showAITips ? "default" : "outline"}
+                  onClick={() => setShowAITips((s) => !s)}
+                >
+                  AI Tips
+                </Button>
+                <Button
+                  size="sm"
+                  variant={showForecast ? "default" : "outline"}
+                  onClick={() => setShowForecast((s) => !s)}
+                >
+                  Forecast
+                </Button>
+                <Button
+                  size="sm"
+                  variant={showAnalyze ? "default" : "outline"}
+                  onClick={() => setShowAnalyze((s) => !s)}
+                >
+                  Analyze
+                </Button>
+                <Button
+                  size="sm"
+                  variant={autoRefreshEnabled ? "default" : "outline"}
+                  onClick={() => setAutoRefreshEnabled((s) => !s)}
+                >
+                  Auto-refresh
+                </Button>
+              </div>
+            </div>
           </div>
           <p className="text-muted-foreground">
             Your Personal Weather Companion - Real-time data with smart location search
@@ -238,19 +278,30 @@ const Index = () => {
               />
             </div>
 
-            <AITips data={weatherData as any} units={units} />
+            {showAITips && <AITips data={weatherData as any} units={units} />}
 
-            <HourlyForecast
-              hourly={weatherData.hourly}
-              units={units}
-              timezoneOffset={weatherData.timezone_offset}
-            />
+            {showForecast && (
+              <>
+                <HourlyForecast
+                  hourly={weatherData.hourly}
+                  units={units}
+                  timezoneOffset={weatherData.timezone_offset}
+                />
 
-            <DailyForecast
-              daily={weatherData.daily}
-              units={units}
-              timezoneOffset={weatherData.timezone_offset}
-            />
+                <DailyForecast
+                  daily={weatherData.daily}
+                  units={units}
+                  timezoneOffset={weatherData.timezone_offset}
+                />
+              </>
+            )}
+
+            {showAnalyze && (
+              <div className="rounded-lg border border-border bg-card text-card-foreground p-4">
+                <h3 className="font-semibold mb-2">Analysis</h3>
+                <p className="text-sm text-muted-foreground">Quick analysis and trends will appear here.</p>
+              </div>
+            )}
           </div>
         )}
 

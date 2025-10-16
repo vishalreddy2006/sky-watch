@@ -46,7 +46,6 @@ export const AITips: React.FC<Props> = ({ data, units }) => {
 
   return (
     <div className="rounded-lg border border-border bg-card text-card-foreground p-4">
-      <h3 className="font-semibold mb-2">AI Tips</h3>
       <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
         {tips.map((t, i) => (
           <li key={i}>{t}</li>
