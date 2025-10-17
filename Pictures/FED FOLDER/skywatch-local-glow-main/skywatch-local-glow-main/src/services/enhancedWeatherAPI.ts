@@ -85,18 +85,45 @@ export class EnhancedWeatherAPI {
 
   // Convert Open-Meteo response to our standard weather format
   static convertOpenMeteoData(data: unknown, units: string) {
-    // Narrow the data shape defensively
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const d = data as any;
+    // Define minimal types for the Open-Meteo response we use
+    type OpenMeteoHourly = {
+      time: string[];
+      temperature_2m: number[];
+      relative_humidity_2m: number[];
+      precipitation_probability: number[];
+      weather_code: number[];
+      wind_speed_10m: number[];
+    };
+    type OpenMeteoDaily = {
+      time: string[];
+      weather_code: number[];
+      temperature_2m_max: number[];
+      temperature_2m_min: number[];
+      precipitation_probability_max?: number[];
+    };
+    type OpenMeteoCurrent = {
+      temperature: number;
+      windspeed: number;
+      weathercode: number;
+    };
+    type OpenMeteoResponse = {
+      current_weather?: OpenMeteoCurrent;
+      hourly?: OpenMeteoHourly;
+      daily?: OpenMeteoDaily;
+      utc_offset_seconds?: number;
+      temperature_unit?: string;
+    };
+
+    const d = (data as OpenMeteoResponse) || {};
     const current = d.current_weather;
-    const hourly = d.hourly;
-    const daily = d.daily;
+    const hourly = d.hourly || { time: [], temperature_2m: [], relative_humidity_2m: [], precipitation_probability: [], weather_code: [], wind_speed_10m: [] } as OpenMeteoHourly;
+    const daily = d.daily || { time: [], weather_code: [], temperature_2m_max: [], temperature_2m_min: [] } as OpenMeteoDaily;
     
     const currentWeatherInfo = this.convertWeatherCode(current.weathercode);
     
     // Convert temperature if needed
     let currentTemp = current.temperature;
-    if (units === 'imperial' && data.temperature_unit === 'celsius') {
+    if (units === 'imperial' && d.temperature_unit === 'celsius') {
       currentTemp = (currentTemp * 9/5) + 32;
     }
     
@@ -149,7 +176,7 @@ export class EnhancedWeatherAPI {
       },
       hourly: hourlyForecast,
       daily: dailyForecast,
-      timezone_offset: data.utc_offset_seconds || 0
+      timezone_offset: d.utc_offset_seconds || 0
     };
   }
 

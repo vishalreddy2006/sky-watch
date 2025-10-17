@@ -1,26 +1,29 @@
 import React from "react";
 
-type WeatherData = {
-  current: {
+type WeatherData = Partial<{
+  current: Partial<{
     temp: number;
     humidity: number;
     pressure: number;
     wind_speed: number;
     uvi: number;
-    weather: Array<{ icon: string; description: string }>;
-  };
-};
+    weather: Array<Partial<{ icon: string; description: string }>>;
+  }>;
+}>;
 
 interface Props {
-  data: WeatherData;
+  data?: WeatherData;
   units: "metric" | "imperial" | string;
 }
 
 export const AITips: React.FC<Props> = ({ data, units }) => {
   const tips: string[] = [];
-  const celsius = units === "imperial" ? (data.current.temp - 32) * (5 / 9) : data.current.temp;
-  const windKph = units === "imperial" ? data.current.wind_speed * 1.60934 : data.current.wind_speed * 3.6;
-  const desc = (data.current.weather[0]?.description || "").toLowerCase();
+  const current = data?.current ?? {};
+  const tempVal = typeof current.temp === 'number' ? current.temp : 0;
+  const celsius = units === "imperial" ? (tempVal - 32) * (5 / 9) : tempVal;
+  const windVal = typeof current.wind_speed === 'number' ? current.wind_speed : 0;
+  const windKph = units === "imperial" ? windVal * 1.60934 : windVal * 3.6;
+  const desc = (current.weather?.[0]?.description || "").toLowerCase();
 
   // Temperature-based
   if (celsius >= 35) tips.push("Very hot today—stay hydrated and avoid peak sun.");

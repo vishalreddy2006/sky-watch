@@ -86,9 +86,10 @@ async function toPDF(data: WeatherData) {
   return doc.output("blob");
 }
 
-interface Props { data: WeatherData; disabled?: boolean }
+interface Props { data?: unknown; disabled?: boolean }
 
 export const ExportMenu: React.FC<Props> = ({ data, disabled }) => {
+  const typed = (data as WeatherData | undefined) ?? undefined;
   const download = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -97,12 +98,12 @@ export const ExportMenu: React.FC<Props> = ({ data, disabled }) => {
   };
 
   const onCSV = () => {
-    const csv = toCSV(data);
+    const csv = toCSV(typed ?? ({} as WeatherData));
     download(new Blob([csv], { type: "text/csv;charset=utf-8;" }), "weather.csv");
   };
 
   const onPDF = async () => {
-    const blob = await toPDF(data);
+    const blob = await toPDF(typed ?? ({} as WeatherData));
     download(blob, "weather.pdf");
   };
 

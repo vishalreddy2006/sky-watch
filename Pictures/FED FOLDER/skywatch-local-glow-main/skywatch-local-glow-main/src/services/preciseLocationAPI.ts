@@ -267,7 +267,7 @@ export class PreciseLocationAPI {
   // Format location for display with proper hierarchy
   static formatLocationDisplay(location: PreciseLocation): string {
     const { address } = location;
-    let parts = [];
+    const parts = [];
     
     // Add road/area if available
     if (address.road && address.road.trim()) {

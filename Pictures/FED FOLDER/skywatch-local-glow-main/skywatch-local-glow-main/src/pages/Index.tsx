@@ -73,18 +73,22 @@ const Index = () => {
     if (fc !== null) setShowForecast(fc === 'true');
     if (an !== null) setShowAnalyze(an === 'true');
     if (ar !== null) setAutoRefreshEnabled(ar === 'true');
-
-    loadWeatherByCity("Hyderabad", units);
-
     // Request notification permission upfront (non-blocking)
     requestNotificationPermission().catch(() => {});
-  }, []);
+
+    // Load default city on mount. Include `units` and `loadWeatherByCity` in deps so
+    // the effect re-runs if the unit system changes or the loader identity changes.
+    loadWeatherByCity("Hyderabad", units);
+  }, [loadWeatherByCity, units]);
 
   // Auto-refresh every 5 minutes when tab is visible and enabled
   useEffect(() => {
     if (!autoRefreshEnabled) return;
+
     const REFRESH_MS = 5 * 60 * 1000;
-  const timer = window.setInterval(refresh, REFRESH_MS);
+
+    // Define refresh before using it in setInterval to avoid referencing a
+    // function that hasn't been initialized yet.
     const refresh = () => {
       if (document.visibilityState === "visible") {
         if (location?.startsWith("📍") || location?.startsWith("🎯")) {
@@ -95,14 +99,16 @@ const Index = () => {
         }
       }
     };
-  // timer already set above
+
+    const timer = window.setInterval(refresh, REFRESH_MS);
+
     const onVis = () => document.visibilityState === "visible" && refresh();
     document.addEventListener("visibilitychange", onVis);
     return () => {
       if (timer) clearInterval(timer);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [selectedCity, units, location, autoRefreshEnabled]);
+  }, [selectedCity, units, location, autoRefreshEnabled, getCurrentLocation, loadWeatherByCity]);
 
   const handleSearch = () => {
     if (city.trim()) {
@@ -135,12 +141,12 @@ const Index = () => {
 
   // Active polling with change detection for notifications
   useEffect(() => {
-      type Snapshot = {
-        current?: { temp?: number; wind_speed?: number };
-        hourly?: Array<{ pop?: number }>;
-      } | null;
-      let lastSnapshot: Snapshot = null;
-  const pollId = window.setInterval(poll, POLL_MS);
+    type Snapshot = {
+      current?: { temp?: number; wind_speed?: number };
+      hourly?: Array<{ pop?: number }>;
+    } | null;
+
+    let lastSnapshot: Snapshot = null;
     const POLL_MS = 60 * 1000; // 1 minute for quick feedback
 
     const significantChange = (oldData: Snapshot, newData: Snapshot) => {
@@ -178,23 +184,29 @@ const Index = () => {
         // Compare snapshots
         const newSnap = weatherData;
         const sig = significantChange(lastSnapshot, newSnap);
-        if (sig) {
+        if (sig && newSnap) {
           if (sig.type === 'temp') {
-            notifyUser('Temperature changed', `Now ${Math.round(newSnap.current.temp)}°, changed by ${Math.round(sig.delta)}°`);
+            notifyUser('Temperature changed', `Now ${Math.round(newSnap.current?.temp ?? 0)}°, changed by ${Math.round(sig.delta)}°`);
           } else if (sig.type === 'rain') {
-            notifyUser('Rain chance increased', `Precip chance rose to ${Math.round(sig.to*100)}%`);
+            notifyUser('Rain chance increased', `Precip chance rose to ${Math.round((sig.to ?? 0) * 100)}%`);
           } else if (sig.type === 'wind') {
             notifyUser('Windy now', `Wind increased by ${Math.round(sig.delta)} ${units === 'metric' ? 'm/s' : 'mph'}`);
           }
         }
-        lastSnapshot = JSON.parse(JSON.stringify(newSnap));
+        try {
+          lastSnapshot = JSON.parse(JSON.stringify(newSnap));
+        } catch (_) {
+          lastSnapshot = newSnap;
+        }
       } catch (e) {
         // ignore polling errors
       }
     };
 
-  // Run first poll immediately (pollId already created)
-  poll();
+    const pollId = window.setInterval(poll, POLL_MS);
+
+    // Run first poll immediately
+    poll();
 
     return () => { if (pollId) clearInterval(pollId); };
   }, [autoRefreshEnabled, selectedCity, units, location, weatherData, getCurrentLocation, loadWeatherByCity]);
