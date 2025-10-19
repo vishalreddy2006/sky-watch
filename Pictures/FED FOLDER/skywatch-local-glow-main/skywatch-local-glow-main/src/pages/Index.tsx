@@ -51,6 +51,7 @@ const Index = () => {
   const [showForecast, setShowForecast] = useState(true);
   const [showAnalyze, setShowAnalyze] = useState(true);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [liveLocationEnabled, setLiveLocationEnabled] = useState(false);
   
   const {
     loading,
@@ -68,17 +69,19 @@ const Index = () => {
     const ai = ls.getItem('showAITips');
     const fc = ls.getItem('showForecast');
     const an = ls.getItem('showAnalyze');
-    const ar = ls.getItem('autoRefreshEnabled');
+  const ar = ls.getItem('autoRefreshEnabled');
+  const ll = ls.getItem('liveLocationEnabled');
     if (ai !== null) setShowAITips(ai === 'true');
     if (fc !== null) setShowForecast(fc === 'true');
     if (an !== null) setShowAnalyze(an === 'true');
     if (ar !== null) setAutoRefreshEnabled(ar === 'true');
-    // Request notification permission upfront (non-blocking)
+  // Request notification permission upfront (non-blocking)
     requestNotificationPermission().catch(() => {});
 
     // Load default city on mount. Include `units` and `loadWeatherByCity` in deps so
     // the effect re-runs if the unit system changes or the loader identity changes.
     loadWeatherByCity("Hyderabad", units);
+    if (ll !== null) setLiveLocationEnabled(ll === 'true');
   }, [loadWeatherByCity, units]);
 
   // Auto-refresh every 5 minutes when tab is visible and enabled
@@ -87,16 +90,11 @@ const Index = () => {
 
     const REFRESH_MS = 5 * 60 * 1000;
 
-    // Define refresh before using it in setInterval to avoid referencing a
-    // function that hasn't been initialized yet.
+    // Define refresh before using it in setInterval
     const refresh = () => {
       if (document.visibilityState === "visible") {
-        if (location?.startsWith("📍") || location?.startsWith("🎯")) {
-          // If location-based, refresh current location
-          getCurrentLocation(units);
-        } else if (selectedCity) {
-          loadWeatherByCity(selectedCity, units);
-        }
+        if (liveLocationEnabled) getCurrentLocation(units);
+        else if (selectedCity) loadWeatherByCity(selectedCity, units);
       }
     };
 
@@ -108,7 +106,7 @@ const Index = () => {
       if (timer) clearInterval(timer);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [selectedCity, units, location, autoRefreshEnabled, getCurrentLocation, loadWeatherByCity]);
+  }, [selectedCity, units, autoRefreshEnabled, liveLocationEnabled, getCurrentLocation, loadWeatherByCity]);
 
   const handleSearch = () => {
     if (city.trim()) {
@@ -117,12 +115,16 @@ const Index = () => {
   };
 
   const handleRefresh = () => {
-    if (location) {
-      if (location === "Your Location") {
-        getCurrentLocation(units);
-      } else {
-        loadWeatherByCity(city || "Paris", units);
-      }
+    if (liveLocationEnabled) {
+      getCurrentLocation(units);
+      return;
+    }
+    if (selectedCity) {
+      loadWeatherByCity(selectedCity, units);
+    } else if (city.trim()) {
+      loadWeatherByCity(city.trim(), units);
+    } else {
+      loadWeatherByCity("Hyderabad", units);
     }
   };
 
@@ -138,78 +140,64 @@ const Index = () => {
   useEffect(() => { window.localStorage.setItem('showForecast', String(showForecast)); }, [showForecast]);
   useEffect(() => { window.localStorage.setItem('showAnalyze', String(showAnalyze)); }, [showAnalyze]);
   useEffect(() => { window.localStorage.setItem('autoRefreshEnabled', String(autoRefreshEnabled)); }, [autoRefreshEnabled]);
+  useEffect(() => { window.localStorage.setItem('liveLocationEnabled', String(liveLocationEnabled)); }, [liveLocationEnabled]);
 
-  // Active polling with change detection for notifications
+  // Change detection for notifications – runs only when weatherData updates
   useEffect(() => {
     type Snapshot = {
       current?: { temp?: number; wind_speed?: number };
       hourly?: Array<{ pop?: number }>;
     } | null;
 
-    let lastSnapshot: Snapshot = null;
-    const POLL_MS = 60 * 1000; // 1 minute for quick feedback
+    // Keep previous snapshot across renders
+    // Using closure over a ref-like variable stored on window to avoid re-init.
+    // Safer approach would be useRef, but we avoid refactoring imports.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    if (!('___lastSnap' in w)) w.___lastSnap = null as Snapshot;
+    if (!('___lastNotify' in w)) w.___lastNotify = 0 as number;
+
+    const lastSnapshot: Snapshot = w.___lastSnap;
+    const now = Date.now();
 
     const significantChange = (oldData: Snapshot, newData: Snapshot) => {
-      if (!oldData || !newData) return false;
+      if (!oldData || !newData) return false as const;
       try {
         const oldTemp = oldData.current?.temp;
         const newTemp = newData.current?.temp;
-        if (typeof oldTemp === 'number' && typeof newTemp === 'number') {
-          if (Math.abs(newTemp - oldTemp) >= 2) return { type: 'temp', delta: newTemp - oldTemp };
+        if (typeof oldTemp === 'number' && typeof newTemp === 'number' && Math.abs(newTemp - oldTemp) >= 2) {
+          return { type: 'temp', delta: newTemp - oldTemp } as const;
         }
         const oldPop = Math.max(...(oldData.hourly?.slice(0, 6).map((h) => h.pop ?? 0) || [0]));
         const newPop = Math.max(...(newData.hourly?.slice(0, 6).map((h) => h.pop ?? 0) || [0]));
-        if (newPop - oldPop >= 0.3) return { type: 'rain', from: oldPop, to: newPop };
-
+        if (newPop - oldPop >= 0.3) return { type: 'rain', from: oldPop, to: newPop } as const;
         const oldWind = oldData.current?.wind_speed || 0;
         const newWind = newData.current?.wind_speed || 0;
-        if (newWind - oldWind >= 5) return { type: 'wind', delta: newWind - oldWind };
-      } catch (e) {
-        return false;
+        if (newWind - oldWind >= 5) return { type: 'wind', delta: newWind - oldWind } as const;
+      } catch {
+        return false as const;
       }
-      return false;
+      return false as const;
     };
 
-    const poll = async () => {
-      try {
-        if (!autoRefreshEnabled) return;
-        // Use currently selected city or location
-        if (location?.startsWith('📍') || location?.startsWith('🎯')) {
-          // If using live location, refresh via getCurrentLocation
-          await getCurrentLocation(units);
-        } else if (selectedCity) {
-          await loadWeatherByCity(selectedCity, units);
+    if (weatherData) {
+      const sig = significantChange(lastSnapshot, weatherData as unknown as Snapshot);
+      const THROTTLE_MS = 120000; // 2 minutes between notifications
+      if (sig && now - w.___lastNotify > THROTTLE_MS) {
+        if (sig.type === 'temp') {
+          notifyUser('Temperature changed', `Now ${Math.round(weatherData.current?.temp ?? 0)}°, Δ ${Math.round(sig.delta)}°`);
+        } else if (sig.type === 'rain') {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const to = (sig as any).to ?? 0;
+          notifyUser('Rain chance increased', `Precip chance ${Math.round(to * 100)}%`);
+        } else if (sig.type === 'wind') {
+          notifyUser('Windy now', `Wind up by ${Math.round((sig as any).delta)} ${units === 'metric' ? 'm/s' : 'mph'}`);
         }
-
-        // Compare snapshots
-        const newSnap = weatherData;
-        const sig = significantChange(lastSnapshot, newSnap);
-        if (sig && newSnap) {
-          if (sig.type === 'temp') {
-            notifyUser('Temperature changed', `Now ${Math.round(newSnap.current?.temp ?? 0)}°, changed by ${Math.round(sig.delta)}°`);
-          } else if (sig.type === 'rain') {
-            notifyUser('Rain chance increased', `Precip chance rose to ${Math.round((sig.to ?? 0) * 100)}%`);
-          } else if (sig.type === 'wind') {
-            notifyUser('Windy now', `Wind increased by ${Math.round(sig.delta)} ${units === 'metric' ? 'm/s' : 'mph'}`);
-          }
-        }
-        try {
-          lastSnapshot = JSON.parse(JSON.stringify(newSnap));
-        } catch (_) {
-          lastSnapshot = newSnap;
-        }
-      } catch (e) {
-        // ignore polling errors
+        w.___lastNotify = now;
       }
-    };
-
-    const pollId = window.setInterval(poll, POLL_MS);
-
-    // Run first poll immediately
-    poll();
-
-    return () => { if (pollId) clearInterval(pollId); };
-  }, [autoRefreshEnabled, selectedCity, units, location, weatherData, getCurrentLocation, loadWeatherByCity]);
+      try { w.___lastSnap = JSON.parse(JSON.stringify(weatherData)); } catch { w.___lastSnap = weatherData; }
+    }
+  }, [weatherData, units]);
 
   const handleCitySelect = (cityName: string) => {
     setSelectedCity(cityName);
@@ -335,13 +323,16 @@ const Index = () => {
           </div>
 
           <Button
-            variant="outline"
-            onClick={() => getCurrentLocation(units)}
-            disabled={loading}
-            className="bg-green-50 hover:bg-green-100 border-green-200"
+            variant={liveLocationEnabled ? "default" : "outline"}
+            onClick={() => {
+              const next = !liveLocationEnabled;
+              setLiveLocationEnabled(next);
+              if (next) getCurrentLocation(units);
+            }}
+            className={cn("border-green-200", liveLocationEnabled ? "bg-green-600 text-white hover:bg-green-700" : "bg-green-50 hover:bg-green-100")}
           >
-            <MapPin className="w-4 h-4 mr-2 text-green-600" />
-            📍 Live Location
+            <MapPin className="w-4 h-4 mr-2" />
+            {liveLocationEnabled ? 'Live Location: ON' : 'Live Location: OFF'}
           </Button>
 
           <Select value={units} onValueChange={handleUnitsChange}>
