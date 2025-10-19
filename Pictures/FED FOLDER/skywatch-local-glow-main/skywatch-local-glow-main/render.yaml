@@ -1,7 +1,0 @@
-services:
-  - type: static
-    name: sky-watch-pro
-    repo: https://github.com/vishalreddy2006/sky-watch-pro
-    branch: main
-    buildCommand: "npm run build"
-    publishPath: dist
