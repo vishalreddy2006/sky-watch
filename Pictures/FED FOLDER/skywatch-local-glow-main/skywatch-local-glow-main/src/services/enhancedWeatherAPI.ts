@@ -7,22 +7,26 @@ export interface WeatherSource {
 
 export class EnhancedWeatherAPI {
   private static readonly WEATHER_SOURCES: WeatherSource[] = [
-    {
-      name: 'OpenWeatherMap',
-      baseUrl: 'https://api.openweathermap.org/data/2.5',
-      requiresAuth: true
-    },
-    {
-      name: 'WeatherAPI',
-      baseUrl: 'https://api.weatherapi.com/v1',
-      requiresAuth: true
-    },
-    {
-      name: 'Open-Meteo',
-      baseUrl: 'https://api.open-meteo.com/v1',
-      requiresAuth: false
-    }
+    { name: 'OpenWeatherMap', baseUrl: 'https://api.openweathermap.org/data/2.5', requiresAuth: true },
+    { name: 'WeatherAPI', baseUrl: 'https://api.weatherapi.com/v1', requiresAuth: true },
+    { name: 'Open-Meteo', baseUrl: 'https://api.open-meteo.com/v1', requiresAuth: false },
   ];
+
+  // Normalized helpers for unit conversion and shape coercion
+  private static normalizeUnits(value: number, from: 'c' | 'f', to: 'metric' | 'imperial') {
+    if (from === 'c' && to === 'imperial') return (value * 9) / 5 + 32;
+    if (from === 'f' && to === 'metric') return ((value - 32) * 5) / 9;
+    return value;
+  }
+
+  private static toNormalizedShape(input: {
+    current: { dt: number; temp: number; humidity: number; pressure: number; wind_speed: number; uvi: number; weather: Array<{ icon: string; description: string }> };
+    hourly: Array<{ dt: number; temp: number; weather: Array<{ icon: string; description: string }>; pop: number }>;
+    daily: Array<{ dt: number; temp: { max: number; min: number }; weather: Array<{ icon: string; description: string }> }>;
+    timezone_offset: number;
+  }) {
+    return input;
+  }
 
   // Get weather from Open-Meteo (free, no API key required)
   static async getOpenMeteoWeather(lat: number, lon: number, units: string = 'metric') {
@@ -46,7 +50,7 @@ export class EnhancedWeatherAPI {
       }
       
       // Convert Open-Meteo format to our standard format
-      return this.convertOpenMeteoData(data, units);
+  return this.convertOpenMeteoData(data, units);
       
     } catch (error) {
       console.error('Open-Meteo weather failed:', error);
@@ -164,7 +168,7 @@ export class EnhancedWeatherAPI {
       });
     }
     
-    return {
+    return this.toNormalizedShape({
       current: {
         dt: Math.floor(currentTime / 1000),
         temp: Math.round(currentTemp),
@@ -177,38 +181,131 @@ export class EnhancedWeatherAPI {
       hourly: hourlyForecast,
       daily: dailyForecast,
       timezone_offset: d.utc_offset_seconds || 0
-    };
+    });
+  }
+
+  // Convert OpenWeather OneCall (2.5/3.0) to normalized shape
+  static convertOpenWeatherData(data: any, units: string) {
+    try {
+      const current = data.current || {};
+      const hourly = Array.isArray(data.hourly) ? data.hourly : [];
+      const daily = Array.isArray(data.daily) ? data.daily : [];
+
+      const hourlyNorm = hourly.slice(0, 24).map((h: any) => ({
+        dt: h.dt,
+        temp: h.temp,
+        weather: [{ icon: h.weather?.[0]?.icon || '02d', description: h.weather?.[0]?.description || 'Unknown' }],
+        pop: typeof h.pop === 'number' ? h.pop : 0,
+      }));
+
+      const dailyNorm = daily.slice(0, 7).map((d: any) => ({
+        dt: d.dt,
+        temp: { max: d.temp?.max, min: d.temp?.min },
+        weather: [{ icon: d.weather?.[0]?.icon || '02d', description: d.weather?.[0]?.description || 'Unknown' }],
+      }));
+
+      return this.toNormalizedShape({
+        current: {
+          dt: current.dt || Math.floor(Date.now() / 1000),
+          temp: Math.round(current.temp ?? 0),
+          humidity: current.humidity ?? 65,
+          pressure: current.pressure ?? 1013,
+          wind_speed: current.wind_speed ?? 0,
+          uvi: current.uvi ?? 5,
+          weather: [{ icon: current.weather?.[0]?.icon || '02d', description: current.weather?.[0]?.description || 'Unknown' }],
+        },
+        hourly: hourlyNorm,
+        daily: dailyNorm,
+        timezone_offset: data.timezone_offset ?? 0,
+      });
+    } catch (e) {
+      throw new Error('Failed to convert OpenWeather data');
+    }
+  }
+
+  // Merge two normalized datasets: prefer live temperature average, max precip prob, and pick best icons/descriptions
+  static mergeWeatherData(primary: any, secondary: any) {
+    if (!secondary) return primary;
+    const merged = JSON.parse(JSON.stringify(primary));
+
+    // Current: average temperature, choose higher wind, take non-empty weather description/icon
+    if (secondary.current) {
+      const temps = [primary.current?.temp, secondary.current?.temp].filter((v) => typeof v === 'number');
+      if (temps.length === 2) merged.current.temp = Math.round((temps[0] + temps[1]) / 2);
+      merged.current.wind_speed = Math.max(primary.current?.wind_speed || 0, secondary.current?.wind_speed || 0);
+      merged.current.humidity = Math.round(((primary.current?.humidity ?? 65) + (secondary.current?.humidity ?? 65)) / 2);
+      merged.current.pressure = primary.current?.pressure || secondary.current?.pressure || 1013;
+      const desc = primary.current?.weather?.[0]?.description || secondary.current?.weather?.[0]?.description;
+      const icon = primary.current?.weather?.[0]?.icon || secondary.current?.weather?.[0]?.icon;
+      merged.current.weather = [{ description: desc || 'Updated conditions', icon: icon || '02d' }];
+    }
+
+    // Hourly: merge by dt; prefer higher precip prob and average temps
+    const byDt: Record<number, any> = {};
+    for (const h of primary.hourly || []) byDt[h.dt] = { ...h };
+    for (const h of secondary.hourly || []) {
+      const ex = byDt[h.dt];
+      if (!ex) byDt[h.dt] = { ...h };
+      else {
+        const t1 = typeof ex.temp === 'number' ? ex.temp : undefined;
+        const t2 = typeof h.temp === 'number' ? h.temp : undefined;
+        byDt[h.dt].temp = t1 !== undefined && t2 !== undefined ? Math.round((t1 + t2) / 2) : (t1 ?? t2);
+        byDt[h.dt].pop = Math.max(ex.pop ?? 0, h.pop ?? 0);
+        byDt[h.dt].weather = [ex.weather?.[0] || h.weather?.[0] || { icon: '02d', description: 'Forecast' }];
+      }
+    }
+    merged.hourly = Object.values(byDt).sort((a: any, b: any) => a.dt - b.dt).slice(0, 24);
+
+    // Daily: merge by dt; average temps and keep description
+    const byDtD: Record<number, any> = {};
+    for (const d of primary.daily || []) byDtD[d.dt] = { ...d };
+    for (const d of secondary.daily || []) {
+      const ex = byDtD[d.dt];
+      if (!ex) byDtD[d.dt] = { ...d };
+      else {
+        const maxes = [ex.temp?.max, d.temp?.max].filter((v) => typeof v === 'number') as number[];
+        const mins = [ex.temp?.min, d.temp?.min].filter((v) => typeof v === 'number') as number[];
+        if (maxes.length === 2) byDtD[d.dt].temp.max = Math.round((maxes[0] + maxes[1]) / 2);
+        if (mins.length === 2) byDtD[d.dt].temp.min = Math.round((mins[0] + mins[1]) / 2);
+        byDtD[d.dt].weather = [ex.weather?.[0] || d.weather?.[0] || { icon: '02d', description: 'Forecast' }];
+      }
+    }
+    merged.daily = Object.values(byDtD).sort((a: any, b: any) => a.dt - b.dt).slice(0, 7);
+
+    return merged;
   }
 
   // Enhanced weather fetching with multiple sources
   static async getAccurateWeather(lat: number, lon: number, units: string = 'metric', apiKey?: string) {
     console.log(`🌍 Getting accurate weather for coordinates: ${lat}, ${lon}`);
-    
-    // Try Open-Meteo first (free, no API key required)
-    try {
-      const weather = await this.getOpenMeteoWeather(lat, lon, units);
-      console.log('✅ Successfully got live weather from Open-Meteo');
-      return { data: weather, source: 'Open-Meteo (Live)' };
-    } catch (error) {
-      console.log('⚠️ Open-Meteo failed, trying other sources...');
-    }
-    
-    // Try OpenWeatherMap if API key is available
+
+    // If we have API key, try to combine Open-Meteo + OpenWeather concurrently
     if (apiKey && apiKey !== 'your_api_key_here' && apiKey !== 'YOUR_API_KEY') {
+      const [meteoRes, owmRes] = await Promise.allSettled([
+        this.getOpenMeteoWeather(lat, lon, units),
+        fetch(`https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&units=${units}&exclude=minutely,alerts&appid=${apiKey}`).then((r) => r.ok ? r.json() : Promise.reject(new Error('OWM bad response')))
+      ]);
+
+      const meteo = meteoRes.status === 'fulfilled' ? meteoRes.value : null;
+      const owmRaw = owmRes.status === 'fulfilled' ? owmRes.value : null;
+      const owm = owmRaw ? this.convertOpenWeatherData(owmRaw, units) : null;
+
+      if (meteo && owm) {
+        const merged = this.mergeWeatherData(meteo, owm);
+        return { data: merged, source: 'Merged (Open-Meteo + OpenWeather)' };
+      }
+      if (meteo) return { data: meteo, source: 'Open-Meteo (Live)' };
+      if (owm) return { data: owm, source: 'OpenWeatherMap (Live)' };
+    } else {
+      // No API key: fall back to Open-Meteo only
       try {
-        const url = `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&units=${units}&exclude=minutely,alerts&appid=${apiKey}`;
-        const response = await fetch(url);
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ Successfully got weather from OpenWeatherMap API');
-          return { data, source: 'OpenWeatherMap (Live)' };
-        }
-      } catch (error) {
-        console.log('⚠️ OpenWeatherMap API failed:', error);
+        const meteo = await this.getOpenMeteoWeather(lat, lon, units);
+        return { data: meteo, source: 'Open-Meteo (Live)' };
+      } catch (e) {
+        // fall through to error
       }
     }
-    
+
     throw new Error('All weather sources failed. Please check your internet connection.');
   }
 }
