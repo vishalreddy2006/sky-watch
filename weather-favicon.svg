@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 32 32">
+  <!-- Sky background -->
+  <rect width="32" height="32" fill="url(#skyGradient)" rx="4"/>
+  
+  <!-- Sun -->
+  <circle cx="12" cy="10" r="4" fill="#FDB813"/>
+  
+  <!-- Sun rays -->
+  <g stroke="#FDB813" stroke-width="1" stroke-linecap="round" opacity="0.8">
+    <line x1="12" y1="4" x2="12" y2="2"/>
+    <line x1="17" y1="7" x2="18" y2="6"/>
+    <line x1="18" y1="10" x2="20" y2="10"/>
+  </g>
+  
+  <!-- Cloud -->
+  <g fill="#FFFFFF" opacity="0.95">
+    <circle cx="22" cy="12" r="3"/>
+    <circle cx="26" cy="12" r="4"/>
+    <circle cx="29" cy="12" r="3"/>
+  </g>
+  
+  <!-- Weather symbol -->
+  <g transform="translate(16, 20)">
+    <rect x="-1" y="-6" width="2" height="8" rx="1" fill="#E5E7EB"/>
+    <circle cx="0" cy="4" r="2" fill="#3B82F6"/>
+    <rect x="-0.5" y="-5" width="1" height="7" rx="0.5" fill="#3B82F6"/>
+  </g>
+  
+  <defs>
+    <linearGradient id="skyGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#87CEEB"/>
+      <stop offset="100%" stop-color="#E0F6FF"/>
+    </linearGradient>
+  </defs>
+</svg>

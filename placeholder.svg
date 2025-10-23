@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" fill="none" viewBox="0 0 1200 1200">
+  <!-- Sky background -->
+  <rect width="1200" height="1200" fill="url(#skyGradient)" rx="50"/>
+  
+  <!-- Sun -->
+  <circle cx="300" cy="300" r="80" fill="#FDB813">
+    <animate attributeName="r" values="80;85;80" dur="3s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Sun rays -->
+  <g stroke="#FDB813" stroke-width="4" stroke-linecap="round">
+    <line x1="300" y1="180" x2="300" y2="140" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;1;0.8" dur="2s" repeatCount="indefinite"/>
+    </line>
+    <line x1="400" y1="220" x2="428" y2="192" opacity="0.6">
+      <animate attributeName="opacity" values="0.6;1;0.6" dur="2.5s" repeatCount="indefinite"/>
+    </line>
+    <line x1="420" y1="300" x2="460" y2="300" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;1;0.8" dur="2.2s" repeatCount="indefinite"/>
+    </line>
+  </g>
+  
+  <!-- Cloud -->
+  <g fill="#FFFFFF" opacity="0.9">
+    <circle cx="800" cy="250" r="60">
+      <animate attributeName="cx" values="800;820;800" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="860" cy="250" r="80">
+      <animate attributeName="cx" values="860;880;860" dur="4s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="920" cy="250" r="60">
+      <animate attributeName="cx" values="920;940;920" dur="4s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Weather icon in center -->
+  <g transform="translate(500, 500)">
+    <!-- Thermometer -->
+    <rect x="-10" y="-80" width="20" height="120" rx="10" fill="#E5E7EB" stroke="#9CA3AF" stroke-width="2"/>
+    <circle cx="0" cy="60" r="25" fill="#EF4444"/>
+    <rect x="-5" y="-70" width="10" height="110" rx="5" fill="#EF4444"/>
+    
+    <!-- Temperature marks -->
+    <g stroke="#6B7280" stroke-width="1">
+      <line x1="15" y1="-60" x2="25" y2="-60"/>
+      <line x1="15" y1="-30" x2="25" y2="-30"/>
+      <line x1="15" y1="0" x2="25" y2="0"/>
+      <line x1="15" y1="30" x2="25" y2="30"/>
+    </g>
+  </g>
+  
+  <!-- SkyWatch Text -->
+  <text x="600" y="800" text-anchor="middle" font-family="Arial, sans-serif" font-size="64" font-weight="bold" fill="#1F2937">SkyWatch</text>
+  <text x="600" y="850" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#6B7280">Weather Dashboard</text>
+  
+  <defs>
+    <linearGradient id="skyGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#87CEEB"/>
+      <stop offset="100%" stop-color="#E0F6FF"/>
+    </linearGradient>
+  </defs>
+</svg>
