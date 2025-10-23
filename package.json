@@ -1,0 +1,9 @@
+{
+  "name": "sky-watch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static build of SkyWatch Pro for Render static site.",
+  "scripts": {
+    "build": "echo \"No build needed - static files only\""
+  }
+}
